@@ -119,7 +119,7 @@ function drawReentryEnvelope(
     frame.telemetry.dynamicPressure,
     frame.telemetry.verticalVelocity,
   )
-  if (intensity <= 0.02) return
+  if (intensity <= 0.01) return
 
   const flowAngle = Math.atan2(frame.state.velocity.y, frame.state.velocity.x)
   const relativeFlow = wrapAngle(flowAngle - frame.state.angle)
@@ -127,24 +127,38 @@ function drawReentryEnvelope(
   context.save()
   context.rotate(-relativeFlow)
   context.globalCompositeOperation = 'lighter'
-  context.shadowColor = '#ff8a32'
-  context.shadowBlur = 18 * intensity
-  context.strokeStyle = `rgba(255, 214, 118, ${0.35 + intensity * 0.58})`
-  context.lineWidth = 1 + intensity * 2.2
+  context.shadowColor = '#ff6b22'
+  context.shadowBlur = 24 + 22 * intensity
+  context.strokeStyle = `rgba(255, 240, 190, ${0.48 + intensity * 0.48})`
+  context.lineWidth = 2.2 + intensity * 3.8
   context.beginPath()
   context.ellipse(
-    length * 0.55,
+    length * 0.57,
     0,
-    length * (0.12 + 0.08 * intensity),
+    length * (0.14 + 0.1 * intensity),
+    bodyWidth * (1.6 + intensity * 1.25),
+    0,
+    -Math.PI / 2,
+    Math.PI / 2,
+  )
+  context.stroke()
+  context.shadowBlur = 12 + 16 * intensity
+  context.strokeStyle = `rgba(255, 91, 30, ${0.42 + intensity * 0.48})`
+  context.lineWidth = 1.4 + intensity * 2.2
+  context.beginPath()
+  context.ellipse(
+    length * 0.52,
+    0,
+    length * (0.1 + 0.07 * intensity),
     bodyWidth * (1.25 + intensity),
     0,
     -Math.PI / 2,
     Math.PI / 2,
   )
   context.stroke()
-  context.fillStyle = `rgba(255, 91, 26, ${0.08 + intensity * 0.2 * flicker})`
+  context.fillStyle = `rgba(255, 76, 20, ${0.13 + intensity * 0.3 * flicker})`
   context.beginPath()
-  context.ellipse(0, 0, length * 0.58, bodyWidth * (0.9 + intensity), 0, 0, Math.PI * 2)
+  context.ellipse(0, 0, length * 0.62, bodyWidth * (1.05 + intensity * 1.2), 0, 0, Math.PI * 2)
   context.fill()
   context.restore()
 }
@@ -162,20 +176,19 @@ function drawRcsPlumes(
   const plumeLength = bodyWidth * (2.4 + activity * 2.6) * flicker
   const drawJet = (x: number, side: number): void => {
     const edge = side * bodyWidth * 0.48
-    context.fillStyle = `rgba(138, 232, 255, ${0.38 + activity * 0.55})`
-    context.shadowColor = '#73dcff'
-    context.shadowBlur = 10 * activity
+    context.fillStyle = `rgba(205, 211, 214, ${0.38 + activity * 0.5})`
+    context.shadowColor = '#d8dcde'
+    context.shadowBlur = 7 * activity
     context.beginPath()
-    context.moveTo(x - 2, edge)
-    context.lineTo(x + 2, edge)
+    context.moveTo(x - 1.8, edge)
+    context.lineTo(x + 1.8, edge)
     context.lineTo(x, edge + side * plumeLength)
     context.closePath()
     context.fill()
   }
   context.save()
-  context.globalCompositeOperation = 'lighter'
-  drawJet(length * 0.31, direction)
-  drawJet(-length * 0.33, -direction)
+  drawJet(length * 0.3, direction)
+  drawJet(length * 0.22, direction)
   context.restore()
 }
 
