@@ -20,7 +20,7 @@ export function referenceController(
   scenario: ScenarioConfig,
 ): ControlInput {
   const altitude = telemetry.altitude
-  const guidanceBias = scenario.id === 'asds' ? -1_600 : 300
+  const guidanceBias = scenario.id === 'asds' ? -1_450 : 30
   const targetError = -telemetry.distanceToTarget + guidanceBias
   const ballisticTime = clamp(
     Math.sqrt((2 * Math.max(altitude, 1)) / 9.81) + Math.max(0, telemetry.verticalVelocity) / 9.81,

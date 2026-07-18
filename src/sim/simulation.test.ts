@@ -3,7 +3,7 @@ import { FIXED_STEP, LEG_BREAK_Q } from './constants'
 import { altitude, downrange, localVelocity, positionFromLocal, velocityFromLocal } from './math'
 import { SCENARIOS } from './scenarios'
 import { evaluateTouchdown } from './scoring'
-import { createInitialState, stepSimulation, telemetryFor } from './simulation'
+import { createInitialState, dragMagnitudeFor, stepSimulation, telemetryFor } from './simulation'
 import type { ControlInput, VehicleState } from './types'
 
 const neutral: ControlInput = { throttleDelta: 0, pitchCommand: 0, deployLegs: false }
@@ -46,6 +46,52 @@ describe('simulation', () => {
     expect(state.throttle).toBeCloseTo(0.4, 4)
     state = stepSimulation(state, { ...neutral, throttleDelta: -1 }, scenario, FIXED_STEP).state
     expect(state.throttle).toBe(0)
+  })
+
+  it('applies atmospheric drag opposite the velocity in dense air', () => {
+    const scenario = SCENARIOS.asds
+    const position = positionFromLocal(0, 10_000)
+    const state: VehicleState = {
+      ...createInitialState(scenario),
+      position,
+      velocity: velocityFromLocal(position, 1_000, 0),
+      angle: Math.PI,
+    }
+    const before = telemetryFor(state, scenario)
+    const after = stepSimulation(state, neutral, scenario, 0.1)
+    expect(before.aerodynamicDeceleration).toBeGreaterThan(0)
+    expect(dragMagnitudeFor(before.dynamicPressure, scenario)).toBeGreaterThan(0)
+    expect(after.telemetry.horizontalVelocity).toBeLessThan(before.horizontalVelocity)
+  })
+
+  it('passively restores a perturbed tail-first attitude', () => {
+    const baseScenario = SCENARIOS.asds
+    const scenario = {
+      ...baseScenario,
+      vehicle: { ...baseScenario.vehicle, finLeverArm: 0 },
+    }
+    const position = positionFromLocal(0, 15_000)
+    const state: VehicleState = {
+      ...createInitialState(scenario),
+      position,
+      velocity: velocityFromLocal(position, 500, 0),
+      angle: -Math.PI + 10 * Math.PI / 180,
+      angularRate: 0,
+    }
+    const after = stepSimulation(state, neutral, scenario, 0.1).state
+    expect(after.angularRate).toBeLessThan(0)
+  })
+
+  it('records signed RCS activity for visual feedback', () => {
+    const scenario = SCENARIOS.asds
+    const state = createInitialState(scenario)
+    const positive = stepSimulation(
+      state,
+      { ...neutral, pitchCommand: 1 },
+      scenario,
+      FIXED_STEP,
+    ).state
+    expect(positive.rcsCommand).toBeGreaterThan(0)
   })
 })
 

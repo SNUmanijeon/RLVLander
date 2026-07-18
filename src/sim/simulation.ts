@@ -61,6 +61,7 @@ export function createInitialState(scenario: ScenarioConfig): VehicleState {
     throttle: 0,
     engineCount: 0,
     rcsRemaining: 1,
+    rcsCommand: 0,
     finDeflection: 0,
     legs: 'stowed',
   }
@@ -96,6 +97,11 @@ function aerodynamicOrientation(state: VehicleState): { axisAngle: number; direc
   }
 }
 
+export function dragMagnitudeFor(dynamicPressure: number, scenario: ScenarioConfig): number {
+  return dynamicPressure * scenario.vehicle.referenceArea *
+    (scenario.vehicle.bodyCd + gridFinAxialCoefficient())
+}
+
 export function telemetryFor(
   state: VehicleState,
   scenario: ScenarioConfig,
@@ -107,6 +113,8 @@ export function telemetryFor(
   const local = localVelocity(state.position, state.velocity)
   const q = 0.5 * atmosphere.density * speed * speed
   const radialAngle = Math.atan2(state.position.y, state.position.x)
+  const mass = scenario.vehicle.dryMass + state.mainPropellant
+  const dragMagnitude = dragMagnitudeFor(q, scenario)
   return {
     elapsedTime: state.time,
     altitude: h,
@@ -116,6 +124,7 @@ export function telemetryFor(
     speed,
     mach: atmosphere.speedOfSound > 0 ? speed / atmosphere.speedOfSound : 0,
     dynamicPressure: q,
+    aerodynamicDeceleration: mass > 0 ? dragMagnitude / mass : 0,
     density: atmosphere.density,
     pressure: atmosphere.pressure,
     mainFuelRatio: state.initialMainPropellant > 0 ? state.mainPropellant / state.initialMainPropellant : 0,
@@ -177,8 +186,7 @@ export function stepSimulation(
   const normalMagnitude = dynamicPressure * vehicle.referenceArea * normalCoefficient
   const normalDirection = { x: -velocityDirection.y, y: velocityDirection.x }
   const normalForce = scale(normalDirection, normalMagnitude)
-  const dragMagnitude =
-    dynamicPressure * vehicle.referenceArea * (vehicle.bodyCd + gridFinAxialCoefficient())
+  const dragMagnitude = dragMagnitudeFor(dynamicPressure, scenario)
   const dragForce = scale(velocityDirection, -dragMagnitude)
   const aerodynamicForce = add(normalForce, dragForce)
 
@@ -186,10 +194,18 @@ export function stepSimulation(
   const finTorque = cross(finPosition, normalForce)
   const blend = rcsBlendForQ(dynamicPressure)
   const rcsAvailable = previous.rcsRemaining > 0 ? 1 : 0
-  const rcsTorque = clamp(input.pitchCommand, -1, 1) * vehicle.maxRcsTorque * blend * rcsAvailable
-  const rcsUse =
-    (Math.abs(clamp(input.pitchCommand, -1, 1)) * blend * dt) / vehicle.rcsFullCommandSeconds
+  const rcsCommand = clamp(input.pitchCommand, -1, 1) * blend * rcsAvailable
+  const rcsTorque = rcsCommand * vehicle.maxRcsTorque
+  const rcsUse = (Math.abs(rcsCommand) * dt) / vehicle.rcsFullCommandSeconds
   const rcsRemaining = Math.max(0, previous.rcsRemaining - rcsUse)
+
+  const tailFirst = aerodynamicOrientationState.directionSign === -1
+  const staticAngle = clamp(bodyAoA, -25 * Math.PI / 180, 25 * Math.PI / 180)
+  const staticTorque = tailFirst
+    ? dynamicPressure * vehicle.referenceArea * vehicle.length * vehicle.staticMargin *
+      (vehicle.staticNormalSlope * staticAngle -
+        vehicle.pitchDampingCoefficient * previous.angularRate)
+    : 0
 
   const totalForce = add(add(gravityForce, thrustForce), aerodynamicForce)
   const acceleration = scale(totalForce, 1 / mass)
@@ -197,7 +213,7 @@ export function stepSimulation(
   let position = add(previous.position, scale(velocity, dt))
 
   const inertia = (mass * (vehicle.length * vehicle.length + 3 * (vehicle.diameter / 2) ** 2)) / 12
-  const angularAcceleration = (finTorque + rcsTorque) / inertia
+  const angularAcceleration = (finTorque + rcsTorque + staticTorque) / inertia
   let angularRate = previous.angularRate + angularAcceleration * dt
   let angle = wrapAngle(previous.angle + angularRate * dt)
 
@@ -212,6 +228,7 @@ export function stepSimulation(
     throttle,
     engineCount,
     rcsRemaining,
+    rcsCommand,
     finDeflection,
     legs,
   }

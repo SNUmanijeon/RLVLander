@@ -1,6 +1,12 @@
 import { DEG } from '../sim/constants'
 import { altitude, clamp, downrange, eastUnit, wrapAngle } from '../sim/math'
 import type { MissionPhase, ScenarioConfig, Telemetry, Vec2, VehicleState } from '../sim/types'
+import {
+  fixedCameraScale,
+  reentryIntensity,
+  secondStageVisual,
+  skyBlendForAltitude,
+} from './visualModel'
 
 interface RenderFrame {
   state: VehicleState
@@ -16,6 +22,7 @@ interface Viewport {
   height: number
   metersPerPixel: number
   cameraX: number
+  cameraAltitude: number
   groundY: number
 }
 
@@ -36,35 +43,31 @@ function resizeCanvas(canvas: HTMLCanvasElement): CanvasRenderingContext2D | nul
 function localPointToScreen(point: Vec2, viewport: Viewport): { x: number; y: number } {
   return {
     x: viewport.width / 2 + (downrange(point) - viewport.cameraX) / viewport.metersPerPixel,
-    y: viewport.groundY - altitude(point) / viewport.metersPerPixel,
+    y: viewport.height / 2 -
+      (altitude(point) - viewport.cameraAltitude) / viewport.metersPerPixel,
   }
 }
 
 function makeViewport(frame: RenderFrame, width: number, height: number): Viewport {
   const horizontalDistance = Math.abs(frame.telemetry.distanceToTarget)
-  const h = frame.telemetry.altitude
-  let horizontalSpan: number
-  let verticalSpan: number
-
-  if (h < 2_000) {
-    horizontalSpan = clamp(Math.max(1_400, horizontalDistance * 2.2, h * 2.2), 1_400, 12_000)
-    verticalSpan = Math.max(1_400, h * 1.35)
-  } else if (h < 15_000) {
-    horizontalSpan = clamp(Math.max(12_000, horizontalDistance * 1.5), 12_000, 80_000)
-    verticalSpan = Math.max(18_000, h * 1.3)
-  } else {
-    horizontalSpan = clamp(Math.max(120_000, horizontalDistance * 1.18), 120_000, 500_000)
-    verticalSpan = Math.max(110_000, h * 1.28)
-  }
-
-  const metersPerPixel = Math.max(horizontalSpan / (width * 0.82), verticalSpan / (height * 0.7))
-  const landingBlend = clamp(1 - h / 25_000, 0, 0.8)
-  const cameraX =
-    frame.telemetry.downrange * (1 - landingBlend) + frame.scenario.targetDownrange * landingBlend
-  return { width, height, metersPerPixel, cameraX, groundY: height * 0.78 }
+  const metersPerPixel = fixedCameraScale(width, height)
+  const visibleApproachDistance = width * metersPerPixel * 0.36
+  const targetBlend = clamp(1 - horizontalDistance / visibleApproachDistance, 0, 0.5)
+  const cameraX = frame.telemetry.downrange * (1 - targetBlend) +
+    frame.scenario.targetDownrange * targetBlend
+  const landingCameraAltitude = (height * 0.78 - height / 2) * metersPerPixel
+  const cameraAltitude = Math.max(frame.telemetry.altitude, landingCameraAltitude)
+  const groundY = height / 2 + cameraAltitude / metersPerPixel
+  return { width, height, metersPerPixel, cameraX, cameraAltitude, groundY }
 }
 
-function drawBackground(context: CanvasRenderingContext2D, width: number, height: number): void {
+function drawBackground(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  vehicleAltitude: number,
+): void {
+  const airBlend = skyBlendForAltitude(vehicleAltitude)
   const sky = context.createLinearGradient(0, 0, 0, height)
   sky.addColorStop(0, '#030813')
   sky.addColorStop(0.56, '#08192b')
@@ -73,6 +76,7 @@ function drawBackground(context: CanvasRenderingContext2D, width: number, height
   context.fillStyle = sky
   context.fillRect(0, 0, width, height)
 
+  context.globalAlpha = 1 - airBlend
   for (let index = 0; index < 72; index += 1) {
     const x = (index * 97.13 + 31) % width
     const y = (index * 53.77 + 17) % (height * 0.67)
@@ -85,12 +89,94 @@ function drawBackground(context: CanvasRenderingContext2D, width: number, height
   }
   context.globalAlpha = 1
 
+  if (airBlend > 0) {
+    const daylight = context.createLinearGradient(0, 0, 0, height)
+    daylight.addColorStop(0, `rgba(41, 118, 188, ${0.88 * airBlend})`)
+    daylight.addColorStop(0.62, `rgba(84, 170, 224, ${0.92 * airBlend})`)
+    daylight.addColorStop(0.82, `rgba(151, 211, 241, ${0.96 * airBlend})`)
+    daylight.addColorStop(1, `rgba(194, 226, 240, ${0.9 * airBlend})`)
+    context.fillStyle = daylight
+    context.fillRect(0, 0, width, height)
+  }
+
   const atmosphere = context.createLinearGradient(0, height * 0.52, 0, height * 0.83)
   atmosphere.addColorStop(0, 'rgba(38, 146, 187, 0)')
-  atmosphere.addColorStop(0.7, 'rgba(38, 146, 187, 0.11)')
-  atmosphere.addColorStop(1, 'rgba(80, 187, 213, 0.18)')
+  atmosphere.addColorStop(0.7, `rgba(38, 146, 187, ${0.11 + airBlend * 0.12})`)
+  atmosphere.addColorStop(1, `rgba(80, 187, 213, ${0.18 + airBlend * 0.2})`)
   context.fillStyle = atmosphere
   context.fillRect(0, height * 0.5, width, height * 0.34)
+}
+
+function drawReentryEnvelope(
+  context: CanvasRenderingContext2D,
+  frame: RenderFrame,
+  length: number,
+  bodyWidth: number,
+): void {
+  const intensity = reentryIntensity(
+    frame.telemetry.altitude,
+    frame.telemetry.mach,
+    frame.telemetry.dynamicPressure,
+    frame.telemetry.verticalVelocity,
+  )
+  if (intensity <= 0.02) return
+
+  const flowAngle = Math.atan2(frame.state.velocity.y, frame.state.velocity.x)
+  const relativeFlow = wrapAngle(flowAngle - frame.state.angle)
+  const flicker = 0.86 + 0.14 * Math.sin(frame.state.time * 31)
+  context.save()
+  context.rotate(-relativeFlow)
+  context.globalCompositeOperation = 'lighter'
+  context.shadowColor = '#ff8a32'
+  context.shadowBlur = 18 * intensity
+  context.strokeStyle = `rgba(255, 214, 118, ${0.35 + intensity * 0.58})`
+  context.lineWidth = 1 + intensity * 2.2
+  context.beginPath()
+  context.ellipse(
+    length * 0.55,
+    0,
+    length * (0.12 + 0.08 * intensity),
+    bodyWidth * (1.25 + intensity),
+    0,
+    -Math.PI / 2,
+    Math.PI / 2,
+  )
+  context.stroke()
+  context.fillStyle = `rgba(255, 91, 26, ${0.08 + intensity * 0.2 * flicker})`
+  context.beginPath()
+  context.ellipse(0, 0, length * 0.58, bodyWidth * (0.9 + intensity), 0, 0, Math.PI * 2)
+  context.fill()
+  context.restore()
+}
+
+function drawRcsPlumes(
+  context: CanvasRenderingContext2D,
+  frame: RenderFrame,
+  length: number,
+  bodyWidth: number,
+): void {
+  if (frame.phase !== 'active' || Math.abs(frame.state.rcsCommand) < 0.01) return
+  const direction = Math.sign(frame.state.rcsCommand)
+  const activity = Math.abs(frame.state.rcsCommand)
+  const flicker = 0.8 + 0.2 * Math.sin(frame.state.time * 47)
+  const plumeLength = bodyWidth * (2.4 + activity * 2.6) * flicker
+  const drawJet = (x: number, side: number): void => {
+    const edge = side * bodyWidth * 0.48
+    context.fillStyle = `rgba(138, 232, 255, ${0.38 + activity * 0.55})`
+    context.shadowColor = '#73dcff'
+    context.shadowBlur = 10 * activity
+    context.beginPath()
+    context.moveTo(x - 2, edge)
+    context.lineTo(x + 2, edge)
+    context.lineTo(x, edge + side * plumeLength)
+    context.closePath()
+    context.fill()
+  }
+  context.save()
+  context.globalCompositeOperation = 'lighter'
+  drawJet(length * 0.31, direction)
+  drawJet(-length * 0.33, -direction)
+  context.restore()
 }
 
 function drawGround(context: CanvasRenderingContext2D, viewport: Viewport): void {
@@ -179,6 +265,96 @@ function drawTarget(context: CanvasRenderingContext2D, frame: RenderFrame, viewp
   context.restore()
 }
 
+function drawSecondStage(
+  context: CanvasRenderingContext2D,
+  frame: RenderFrame,
+  viewport: Viewport,
+): void {
+  if (frame.phase !== 'active' && frame.phase !== 'paused') return
+  const stage = secondStageVisual(frame.scenario, frame.state.time)
+  if (!stage.active) return
+  const screen = localPointToScreen(stage.position, viewport)
+  const margin = 62
+  const visible = screen.x >= margin && screen.x <= viewport.width - margin &&
+    screen.y >= margin && screen.y <= viewport.height - margin
+
+  if (!visible) {
+    const centerX = viewport.width / 2
+    const centerY = viewport.height / 2
+    const dx = screen.x - centerX
+    const dy = screen.y - centerY
+    const edgeScale = Math.min(
+      (viewport.width / 2 - margin) / Math.max(Math.abs(dx), 1),
+      (viewport.height / 2 - margin) / Math.max(Math.abs(dy), 1),
+      1,
+    )
+    const x = centerX + dx * edgeScale
+    const y = centerY + dy * edgeScale
+    const direction = Math.atan2(dy, dx)
+    context.save()
+    context.translate(x, y)
+    context.rotate(direction)
+    context.fillStyle = '#e5f6f8'
+    context.beginPath()
+    context.moveTo(10, 0)
+    context.lineTo(-4, -5)
+    context.lineTo(-4, 5)
+    context.closePath()
+    context.fill()
+    context.restore()
+    context.fillStyle = 'rgba(3, 12, 22, 0.78)'
+    context.fillRect(clamp(x - 69, 8, viewport.width - 146), clamp(y + 12, 64, viewport.height - 32), 138, 19)
+    context.fillStyle = '#c8e9ed'
+    context.font = '600 8px "IBM Plex Mono", monospace'
+    context.textAlign = 'center'
+    context.fillText(
+      'SECOND STAGE ASCENT',
+      clamp(x, 77, viewport.width - 77),
+      clamp(y + 25, 77, viewport.height - 18),
+    )
+    return
+  }
+
+  const length = clamp(25 / viewport.metersPerPixel, 17, 42)
+  const bodyWidth = Math.max(3.5, length / 8)
+  const east = eastUnit(stage.position)
+  const localAngle = wrapAngle(stage.angle - Math.atan2(east.y, east.x))
+  context.save()
+  context.translate(screen.x, screen.y)
+  context.rotate(-localAngle)
+  const plumeLength = length * (0.48 + 0.08 * Math.sin(frame.state.time * 35))
+  const plume = context.createLinearGradient(-length / 2 - plumeLength, 0, -length / 2, 0)
+  plume.addColorStop(0, 'rgba(84, 205, 255, 0)')
+  plume.addColorStop(0.6, 'rgba(84, 205, 255, 0.6)')
+  plume.addColorStop(1, 'rgba(255, 205, 115, 0.95)')
+  context.fillStyle = plume
+  context.beginPath()
+  context.moveTo(-length / 2, -bodyWidth * 0.35)
+  context.lineTo(-length / 2 - plumeLength, 0)
+  context.lineTo(-length / 2, bodyWidth * 0.35)
+  context.closePath()
+  context.fill()
+  context.fillStyle = '#d9e4e8'
+  context.strokeStyle = '#f8ffff'
+  context.lineWidth = 1
+  context.beginPath()
+  context.roundRect(-length / 2, -bodyWidth / 2, length * 0.82, bodyWidth, bodyWidth * 0.25)
+  context.fill()
+  context.stroke()
+  context.beginPath()
+  context.moveTo(length * 0.32, -bodyWidth / 2)
+  context.lineTo(length / 2, 0)
+  context.lineTo(length * 0.32, bodyWidth / 2)
+  context.closePath()
+  context.fill()
+  context.stroke()
+  context.restore()
+  context.fillStyle = '#c8e9ed'
+  context.font = '600 8px "IBM Plex Mono", monospace'
+  context.textAlign = 'center'
+  context.fillText('STAGE 2', screen.x, screen.y - 13)
+}
+
 function drawBooster(context: CanvasRenderingContext2D, frame: RenderFrame, viewport: Viewport): void {
   const screen = localPointToScreen(frame.state.position, viewport)
   const length = clamp(frame.scenario.vehicle.length / viewport.metersPerPixel, 30, 88)
@@ -190,6 +366,8 @@ function drawBooster(context: CanvasRenderingContext2D, frame: RenderFrame, view
   context.save()
   context.translate(screen.x, screen.y)
   context.rotate(-localAngle)
+
+  drawReentryEnvelope(context, frame, length, bodyWidth)
 
   if (frame.state.throttle > 0 && frame.state.engineCount > 0) {
     const plumeLength = length * (0.28 + frame.state.throttle * 0.52)
@@ -205,6 +383,8 @@ function drawBooster(context: CanvasRenderingContext2D, frame: RenderFrame, view
     context.closePath()
     context.fill()
   }
+
+  drawRcsPlumes(context, frame, length, bodyWidth)
 
   context.fillStyle = '#dce6ea'
   context.strokeStyle = '#ffffff'
@@ -393,12 +573,13 @@ export function drawGame(canvas: HTMLCanvasElement, frame: RenderFrame): void {
   const width = bounds.width
   const height = bounds.height
   context.clearRect(0, 0, width, height)
-  drawBackground(context, width, height)
+  drawBackground(context, width, height, frame.telemetry.altitude)
   const viewport = makeViewport(frame, width, height)
   drawPath(context, frame.prediction, viewport, 'rgba(244, 193, 110, 0.52)', true)
   drawPath(context, frame.path, viewport, 'rgba(102, 221, 230, 0.72)')
   drawGround(context, viewport)
   drawTarget(context, frame, viewport)
+  drawSecondStage(context, frame, viewport)
   drawBooster(context, frame, viewport)
   drawMiniMap(context, frame, width)
   drawWarnings(context, frame, width, height)
@@ -412,4 +593,3 @@ export function drawGame(canvas: HTMLCanvasElement, frame: RenderFrame): void {
 export function pitchDegrees(telemetry: Telemetry): number {
   return telemetry.pitch / DEG
 }
-

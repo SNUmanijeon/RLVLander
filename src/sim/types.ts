@@ -21,6 +21,9 @@ export interface VehicleConfig {
   finLeverArm: number
   maxRcsTorque: number
   rcsFullCommandSeconds: number
+  staticMargin: number
+  staticNormalSlope: number
+  pitchDampingCoefficient: number
 }
 
 export interface ScenarioConfig {
@@ -53,6 +56,7 @@ export interface VehicleState {
   throttle: number
   engineCount: number
   rcsRemaining: number
+  rcsCommand: number
   finDeflection: number
   legs: LegState
 }
@@ -99,6 +103,7 @@ export interface Telemetry {
   speed: number
   mach: number
   dynamicPressure: number
+  aerodynamicDeceleration: number
   density: number
   pressure: number
   mainFuelRatio: number

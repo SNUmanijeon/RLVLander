@@ -33,6 +33,7 @@ export function TelemetryPanel({
     ['SPEED', `${number(telemetry.speed, 0)} m/s`],
     ['MACH', number(telemetry.mach, 2)],
     ['DYN PRESS', `${number(telemetry.dynamicPressure / 1000, 2)} kPa`],
+    ['AERO DECEL', `${number(telemetry.aerodynamicDeceleration, 2)} m/s²`],
     ['PITCH', `${velocity(pitchDegrees(telemetry))}°`],
     ['ROT RATE', `${velocity((telemetry.angularRate * 180) / Math.PI)} °/s`],
     ['ENGINES', telemetry.engineCount.toString()],
@@ -73,4 +74,3 @@ export function TelemetryPanel({
     </aside>
   )
 }
-

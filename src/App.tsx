@@ -52,6 +52,7 @@ function interpolateState(previous: VehicleState, current: VehicleState, alpha: 
     mainPropellant: mix(previous.mainPropellant, current.mainPropellant),
     throttle: mix(previous.throttle, current.throttle),
     rcsRemaining: mix(previous.rcsRemaining, current.rcsRemaining),
+    rcsCommand: mix(previous.rcsCommand, current.rcsCommand),
     finDeflection: mix(previous.finDeflection, current.finDeflection),
   }
 }

@@ -39,4 +39,7 @@ export const VEHICLE: VehicleConfig = {
   finLeverArm: 14.5,
   maxRcsTorque: 650_000,
   rcsFullCommandSeconds: 60,
+  staticMargin: 0.12,
+  staticNormalSlope: 0.8,
+  pitchDampingCoefficient: 0.55,
 }

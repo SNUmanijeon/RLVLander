@@ -52,7 +52,10 @@ This runs linting, TypeScript checking, deterministic simulation tests, and a pr
 - Body drag, aggregate grid-fin normal and axial forces, a changing pitch moment of inertia, propellant mass flow, and pressure-dependent thrust and specific impulse.
 - Axial thrust only—there is no thrust-vector control. Three engines are available above 15 km and the center engine below it.
 - Dynamic-pressure blending between finite cold-gas RCS and grid-fin pitch control.
+- Positive tail-first static margin with aerodynamic pitch damping during atmospheric flight.
 - A gravity-only trajectory estimate recalculated twice per simulated second for the minimap.
+
+The main camera holds a fixed landing-scale zoom throughout the mission so closing speed remains visually consistent. The altitude-responsive sky, RCS jets, reentry shock/plasma envelope, and departing second stage are presentation effects driven by deterministic flight state; they do not add hidden forces to the simulation.
 
 The pure simulation transition lives in `src/sim/simulation.ts`; scenario data is in `src/sim/scenarios.ts`. Rendering is performed on an HTML Canvas, while React supplies the mission briefing, HUD, touch controls, pause screen, and debrief.
 
