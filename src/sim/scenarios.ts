@@ -1,0 +1,41 @@
+import { VEHICLE } from './constants'
+import type { ScenarioConfig, ScenarioId } from './types'
+
+export const SCENARIOS: Record<ScenarioId, ScenarioConfig> = {
+  asds: {
+    id: 'asds',
+    name: 'Drone Ship Recovery',
+    shortName: 'ASDS',
+    difficulty: 'Guided',
+    description: 'Ride the existing downrange arc, manage reentry energy, and settle onto a 90 m deck.',
+    objective: 'The ship is near your passive impact corridor. Save fuel for the final landing burn.',
+    initialAltitude: 70_000,
+    initialDownrange: 100_000,
+    initialHorizontalVelocity: 1_500,
+    initialVerticalVelocity: 500,
+    initialMainPropellant: 65_000,
+    targetDownrange: 381_250,
+    targetWidth: 90,
+    targetKind: 'ship',
+    vehicle: VEHICLE,
+    calibrationNote: 'Gameplay-tuned against the supplied lower-energy reference envelope.',
+  },
+  rtls: {
+    id: 'rtls',
+    name: 'Return to Launch Site',
+    shortName: 'RTLS',
+    difficulty: 'Expert',
+    description: 'Flip with finite RCS, cancel downrange velocity, and fly the booster back to the pad.',
+    objective: 'The launch site is behind you. Every second of boost-back costs landing reserve.',
+    initialAltitude: 70_000,
+    initialDownrange: 20_000,
+    initialHorizontalVelocity: 1_550,
+    initialVerticalVelocity: 500,
+    initialMainPropellant: 165_000,
+    targetDownrange: 0,
+    targetWidth: 80,
+    targetKind: 'pad',
+    vehicle: VEHICLE,
+    calibrationNote: 'Gameplay-tuned as the higher-Mach, higher-dynamic-pressure mission.',
+  },
+}
