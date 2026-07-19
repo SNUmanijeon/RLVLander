@@ -54,7 +54,7 @@ function makeViewport(frame: RenderFrame, width: number, height: number): Viewpo
   const visibleApproachDistance = width * metersPerPixel * 0.36
   const targetBlend = clamp(1 - horizontalDistance / visibleApproachDistance, 0, 0.5)
   const cameraX = frame.telemetry.downrange * (1 - targetBlend) +
-    frame.scenario.targetDownrange * targetBlend
+    frame.telemetry.targetDownrange * targetBlend
   const landingCameraAltitude = (height * 0.78 - height / 2) * metersPerPixel
   const cameraAltitude = Math.max(frame.telemetry.altitude, landingCameraAltitude)
   const groundY = height / 2 + cameraAltitude / metersPerPixel
@@ -235,13 +235,27 @@ function drawPath(
 
 function drawTarget(context: CanvasRenderingContext2D, frame: RenderFrame, viewport: Viewport): void {
   const x = viewport.width / 2 +
-    (frame.scenario.targetDownrange - viewport.cameraX) / viewport.metersPerPixel
+    (frame.telemetry.targetDownrange - viewport.cameraX) / viewport.metersPerPixel
   const y = viewport.groundY
   const exaggeratedWidth = clamp(frame.scenario.targetWidth / viewport.metersPerPixel, 24, 104)
 
   context.save()
   context.translate(x, y)
   if (frame.scenario.targetKind === 'ship') {
+    const motion = clamp(Math.abs(frame.telemetry.targetHorizontalVelocity) / 10, 0, 1)
+    const wakeDirection = -Math.sign(frame.telemetry.targetHorizontalVelocity || 1)
+    context.strokeStyle = `rgba(150, 226, 240, ${0.18 + motion * 0.35})`
+    context.lineWidth = 1
+    for (let wake = 0; wake < 3; wake += 1) {
+      const wakeY = 7 + wake * 3
+      context.beginPath()
+      context.moveTo(wakeDirection * exaggeratedWidth * 0.44, wakeY)
+      context.lineTo(
+        wakeDirection * exaggeratedWidth * (0.75 + wake * 0.18 + motion * 0.35),
+        wakeY + 1,
+      )
+      context.stroke()
+    }
     context.fillStyle = '#182d39'
     context.strokeStyle = '#73d4dc'
     context.lineWidth = 1.5
@@ -274,7 +288,10 @@ function drawTarget(context: CanvasRenderingContext2D, frame: RenderFrame, viewp
   context.fillStyle = '#8eeaf0'
   context.font = '600 10px "IBM Plex Mono", monospace'
   context.textAlign = 'center'
-  context.fillText(frame.scenario.shortName, 0, -22)
+  const targetLabel = frame.scenario.targetKind === 'ship'
+    ? `${frame.scenario.shortName} ${frame.telemetry.targetHorizontalVelocity >= 0 ? '+' : ''}${frame.telemetry.targetHorizontalVelocity.toFixed(1)} m/s`
+    : frame.scenario.shortName
+  context.fillText(targetLabel, 0, -22)
   context.restore()
 }
 
@@ -442,7 +459,7 @@ function drawBooster(context: CanvasRenderingContext2D, frame: RenderFrame, view
   context.restore()
 
   const targetX = viewport.width / 2 +
-    (frame.scenario.targetDownrange - viewport.cameraX) / viewport.metersPerPixel
+    (frame.telemetry.targetDownrange - viewport.cameraX) / viewport.metersPerPixel
   const targetY = viewport.groundY
   const dx = targetX - screen.x
   const dy = targetY - screen.y
@@ -489,7 +506,12 @@ function drawMiniMap(context: CanvasRenderingContext2D, frame: RenderFrame, widt
   const y = 76
   const padding = 15
   const allPoints = [...frame.path, ...frame.prediction, frame.state.position]
-  const xs = allPoints.map(downrange).concat(frame.scenario.targetDownrange, frame.scenario.initialDownrange)
+  const xs = allPoints.map(downrange).concat(
+    frame.scenario.targetDownrange,
+    frame.telemetry.targetDownrange,
+    frame.telemetry.estimatedImpactDownrange,
+    frame.scenario.initialDownrange,
+  )
   const hs = allPoints.map((point) => Math.max(0, altitude(point))).concat(frame.scenario.initialAltitude)
   const minX = Math.min(...xs)
   const maxX = Math.max(...xs)
@@ -542,10 +564,30 @@ function drawMiniMap(context: CanvasRenderingContext2D, frame: RenderFrame, widt
   const startY = mapY(frame.scenario.initialAltitude)
   context.fillStyle = '#8b99a5'
   context.fillRect(startX - 2, startY - 2, 4, 4)
+  if (frame.scenario.targetKind === 'ship') {
+    context.strokeStyle = 'rgba(244, 193, 110, 0.42)'
+    context.lineWidth = 1
+    context.beginPath()
+    context.arc(mapX(frame.scenario.targetDownrange), mapY(0), 3, 0, Math.PI * 2)
+    context.stroke()
+  }
   context.fillStyle = '#f4c16e'
   context.beginPath()
-  context.arc(mapX(frame.scenario.targetDownrange), mapY(0), 4, 0, Math.PI * 2)
+  context.arc(mapX(frame.telemetry.targetDownrange), mapY(0), 4, 0, Math.PI * 2)
   context.fill()
+  if (frame.scenario.targetKind === 'ship') {
+    const impactX = mapX(frame.telemetry.estimatedImpactDownrange)
+    const impactY = mapY(0)
+    context.strokeStyle = '#b9f2f3'
+    context.lineWidth = 1.2
+    context.beginPath()
+    context.moveTo(impactX, impactY - 5)
+    context.lineTo(impactX + 5, impactY)
+    context.lineTo(impactX, impactY + 5)
+    context.lineTo(impactX - 5, impactY)
+    context.closePath()
+    context.stroke()
+  }
   context.fillStyle = '#7ce4eb'
   context.beginPath()
   context.arc(mapX(frame.telemetry.downrange), mapY(frame.telemetry.altitude), 4, 0, Math.PI * 2)

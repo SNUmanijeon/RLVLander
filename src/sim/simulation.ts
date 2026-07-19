@@ -29,6 +29,7 @@ import {
   wrapAngle,
 } from './math'
 import { evaluateTouchdown } from './scoring'
+import { predictPassiveImpactDownrange } from './predictor'
 import type {
   ControlInput,
   ScenarioConfig,
@@ -50,7 +51,7 @@ export function createInitialState(scenario: ScenarioConfig): VehicleState {
     scenario.initialHorizontalVelocity,
     scenario.initialVerticalVelocity,
   )
-  return {
+  const state: VehicleState = {
     time: 0,
     position,
     velocity,
@@ -64,7 +65,12 @@ export function createInitialState(scenario: ScenarioConfig): VehicleState {
     rcsCommand: 0,
     finDeflection: 0,
     legs: 'stowed',
+    targetDownrange: scenario.targetDownrange,
+    targetHorizontalVelocity: 0,
+    estimatedImpactDownrange: scenario.targetDownrange,
   }
+  state.estimatedImpactDownrange = predictPassiveImpactDownrange(state, scenario)
+  return state
 }
 
 function rcsBlendForQ(dynamicPressure: number): number {
@@ -131,7 +137,12 @@ export function telemetryFor(
     rcsRatio: state.rcsRemaining,
     finForceRatio: finForceRatio(currentFinForce, scenario.vehicle.referenceArea),
     rcsBlend: rcsBlendForQ(q),
-    distanceToTarget: downrange(state.position) - scenario.targetDownrange,
+    distanceToTarget: downrange(state.position) - state.targetDownrange,
+    targetDownrange: state.targetDownrange,
+    targetHorizontalVelocity: state.targetHorizontalVelocity,
+    relativeHorizontalVelocity: local.x - state.targetHorizontalVelocity,
+    estimatedImpactDownrange: state.estimatedImpactDownrange,
+    estimatedImpactError: state.estimatedImpactDownrange - state.targetDownrange,
     pitch: wrapAngle(state.angle - radialAngle),
     angularRate: state.angularRate,
     throttle: state.throttle,
@@ -153,6 +164,24 @@ export function stepSimulation(
   const velocityDirection = normalize(previous.velocity)
   const flowAngle = speed > 1e-6 ? Math.atan2(previous.velocity.y, previous.velocity.x) : previous.angle
   const dynamicPressure = 0.5 * atmosphere.density * speed * speed
+
+  let targetDownrange = previous.targetDownrange
+  let targetHorizontalVelocity = previous.targetHorizontalVelocity
+  if (scenario.targetMotion) {
+    const targetError = previous.estimatedImpactDownrange - previous.targetDownrange
+    const desiredVelocity = clamp(
+      targetError / scenario.targetMotion.responseTime,
+      -scenario.targetMotion.maxSpeed,
+      scenario.targetMotion.maxSpeed,
+    )
+    targetHorizontalVelocity = moveToward(
+      previous.targetHorizontalVelocity,
+      desiredVelocity,
+      scenario.targetMotion.maxAcceleration * dt,
+    )
+    targetDownrange +=
+      (previous.targetHorizontalVelocity + targetHorizontalVelocity) * 0.5 * dt
+  }
 
   let throttle = applyThrottleInput(previous.throttle, input.throttleDelta, dt, vehicle.minThrottle)
   const finTarget = clamp(input.pitchCommand, -1, 1) * MAX_FIN_ANGLE
@@ -231,6 +260,21 @@ export function stepSimulation(
     rcsCommand,
     finDeflection,
     legs,
+    targetDownrange,
+    targetHorizontalVelocity,
+    estimatedImpactDownrange: previous.estimatedImpactDownrange,
+  }
+
+  if (scenario.targetMotion) {
+    const previousPredictionTick = Math.floor(
+      previous.time / scenario.targetMotion.predictionInterval,
+    )
+    const currentPredictionTick = Math.floor(
+      state.time / scenario.targetMotion.predictionInterval,
+    )
+    if (currentPredictionTick > previousPredictionTick) {
+      state.estimatedImpactDownrange = predictPassiveImpactDownrange(state, scenario)
+    }
   }
 
   const telemetry = telemetryFor(state, scenario, normalMagnitude)

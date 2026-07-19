@@ -40,6 +40,15 @@ export function TelemetryPanel({
     ['LEGS', telemetry.legs.toUpperCase()],
   ]
 
+  if (scenario.targetKind === 'ship') {
+    values.splice(
+      4,
+      0,
+      ['SHIP V', `${velocity(telemetry.targetHorizontalVelocity)} m/s`],
+      ['COAST Δ', `${number(telemetry.estimatedImpactError / 1000, 2)} km`],
+    )
+  }
+
   return (
     <aside className="telemetry-panel" aria-label="Flight telemetry">
       <div className="telemetry-heading">

@@ -2,7 +2,7 @@
 
 RLV Lander is a single-player browser game about recovering a reusable first-stage booster. It combines the feel of a classic lunar-lander game with a two-dimensional, Earth-centered flight model and two recovery missions:
 
-- **ASDS — Autonomous Spaceport Drone Ship:** follow the downrange arc and land on a 90 m deck.
+- **ASDS — Autonomous Spaceport Drone Ship:** brake an overshooting downrange arc while the ship repositions beneath the estimated coast impact, then land on its 90 m deck.
 - **RTLS — Return to Launch Site:** flip, perform a boost-back burn, and return to an 80 m pad.
 
 The game is an unofficial educational project. Its vehicle and engine values are representative approximations, not an exact model of Falcon 9 or any real flight.
@@ -54,6 +54,7 @@ This runs linting, TypeScript checking, deterministic simulation tests, and a pr
 - Dynamic-pressure blending between finite cold-gas RCS and grid-fin pitch control.
 - Positive tail-first static margin with aerodynamic pitch damping during atmospheric flight.
 - A gravity-only trajectory estimate recalculated twice per simulated second for the minimap.
+- A drag-aware coast-impact estimate drives the ASDS station-keeping controller. The ship has capped speed and acceleration, and touchdown lateral speed is measured relative to the moving deck.
 
 The main camera holds a fixed landing-scale zoom throughout the mission so closing speed remains visually consistent. The altitude-responsive sky, RCS jets, reentry shock/plasma envelope, and departing second stage are presentation effects driven by deterministic flight state; they do not add hidden forces to the simulation.
 
@@ -63,7 +64,7 @@ The pure simulation transition lives in `src/sim/simulation.ts`; scenario data i
 
 The bundled scenario values are gameplay-tuned against qualitative reference envelopes:
 
-- Passive ASDS flight approaches within 5 km of its frozen ship position.
+- The initial passive ASDS trajectory overshoots the ship. The ship can chase the estimate within limited speed and acceleration, while the player uses drag and retroburn to close the remaining gap.
 - Passive RTLS flight misses the launch site by more than 200 km, so a boost-back is required.
 - RTLS produces the higher peak Mach number and dynamic pressure.
 - A deterministic test controller can land both missions with positive main-propellant and RCS reserves.

@@ -20,7 +20,7 @@ export function referenceController(
   scenario: ScenarioConfig,
 ): ControlInput {
   const altitude = telemetry.altitude
-  const guidanceBias = scenario.id === 'asds' ? -1_450 : 30
+  const guidanceBias = scenario.id === 'asds' ? -1_075 : 30
   const targetError = -telemetry.distanceToTarget + guidanceBias
   const ballisticTime = clamp(
     Math.sqrt((2 * Math.max(altitude, 1)) / 9.81) + Math.max(0, telemetry.verticalVelocity) / 9.81,
@@ -34,9 +34,10 @@ export function referenceController(
   const guidanceTime = scenario.id === 'rtls'
     ? ballisticTime * (altitude < 50_000 ? 1.15 : 0.72)
     : ballisticTime
-  const desiredHorizontalSpeed = clamp(targetError / guidanceTime, -horizontalLimit, horizontalLimit)
+  const desiredHorizontalSpeed = telemetry.targetHorizontalVelocity +
+    clamp(targetError / guidanceTime, -horizontalLimit, horizontalLimit)
   const desiredVertical = desiredVerticalSpeed(altitude)
-  const terminalGain = scenario.id === 'rtls' ? 1.2 : 0.4
+  const terminalGain = scenario.id === 'rtls' ? 1.2 : 0.35
   const gain = altitude > 20_000 ? 0.035 : altitude > 5_000 ? 0.055 : altitude > 1_000 ? 0.12 : altitude > 500 ? 0.22 : terminalGain
 
   let horizontalAcceleration = clamp(
@@ -47,9 +48,10 @@ export function referenceController(
   if (
     altitude < 500 &&
     Math.abs(telemetry.distanceToTarget) < scenario.targetWidth / 2 &&
-    Math.abs(telemetry.horizontalVelocity) < 5
+    Math.abs(telemetry.relativeHorizontalVelocity) < 5
   ) {
-    horizontalAcceleration = -telemetry.horizontalVelocity * 0.25
+    horizontalAcceleration =
+      (telemetry.targetHorizontalVelocity - telemetry.horizontalVelocity) * 0.25
   }
   const netVerticalAcceleration = clamp((desiredVertical - telemetry.verticalVelocity) * gain, -18, 18)
   const gravityCompensation = 9.81 * (6_371_000 / (6_371_000 + altitude)) ** 2

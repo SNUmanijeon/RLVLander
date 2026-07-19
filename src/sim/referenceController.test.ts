@@ -21,7 +21,7 @@ function flyReferenceMission(scenario: ScenarioConfig): MissionResult | undefine
 describe('reference guidance', () => {
   it.each([SCENARIOS.asds, SCENARIOS.rtls])('can complete $shortName with reserves remaining', (scenario) => {
     const result = flyReferenceMission(scenario)
-    expect(result?.outcome).toBe('landed')
+    expect(result?.outcome, JSON.stringify(result)).toBe('landed')
     expect(result?.mainFuelRatio).toBeGreaterThan(0)
     expect(result?.rcsRatio).toBeGreaterThan(0)
   })

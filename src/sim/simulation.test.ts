@@ -93,6 +93,32 @@ describe('simulation', () => {
     ).state
     expect(positive.rcsCommand).toBeGreaterThan(0)
   })
+
+  it('moves the ASDS toward the estimated coast impact within its motion limits', () => {
+    const scenario = SCENARIOS.asds
+    const motion = scenario.targetMotion!
+    let state = createInitialState(scenario)
+    const initialTarget = state.targetDownrange
+
+    for (let index = 0; index < 60 * 120; index += 1) {
+      const previousVelocity = state.targetHorizontalVelocity
+      state = stepSimulation(state, neutral, scenario, FIXED_STEP).state
+      expect(Math.abs(state.targetHorizontalVelocity)).toBeLessThanOrEqual(motion.maxSpeed + 1e-9)
+      expect(Math.abs(state.targetHorizontalVelocity - previousVelocity)).toBeLessThanOrEqual(
+        motion.maxAcceleration * FIXED_STEP + 1e-9,
+      )
+    }
+
+    expect(state.targetDownrange).toBeGreaterThan(initialTarget)
+    expect(state.targetHorizontalVelocity).toBeGreaterThan(0)
+  })
+
+  it('keeps the RTLS pad fixed', () => {
+    const scenario = SCENARIOS.rtls
+    const state = stepSimulation(createInitialState(scenario), neutral, scenario, 10).state
+    expect(state.targetDownrange).toBe(scenario.targetDownrange)
+    expect(state.targetHorizontalVelocity).toBe(0)
+  })
 })
 
 describe('touchdown classification', () => {
@@ -124,5 +150,23 @@ describe('touchdown classification', () => {
       legs: 'stowed',
     }
     expect(evaluateTouchdown(state, telemetryFor(state, scenario), scenario).reason).toBe('legs_stowed')
+  })
+
+  it('judges ASDS lateral speed relative to the moving deck', () => {
+    const scenario = SCENARIOS.asds
+    const position = positionFromLocal(scenario.targetDownrange, 0)
+    const state: VehicleState = {
+      ...createInitialState(scenario),
+      position,
+      velocity: velocityFromLocal(position, 7, -2),
+      angle: Math.atan2(position.y, position.x),
+      angularRate: 0,
+      legs: 'deployed',
+      targetDownrange: scenario.targetDownrange,
+      targetHorizontalVelocity: 7,
+    }
+    const result = evaluateTouchdown(state, telemetryFor(state, scenario), scenario)
+    expect(result.outcome).toBe('landed')
+    expect(result.horizontalSpeed).toBeCloseTo(0)
   })
 })

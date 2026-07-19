@@ -54,6 +54,15 @@ function interpolateState(previous: VehicleState, current: VehicleState, alpha: 
     rcsRemaining: mix(previous.rcsRemaining, current.rcsRemaining),
     rcsCommand: mix(previous.rcsCommand, current.rcsCommand),
     finDeflection: mix(previous.finDeflection, current.finDeflection),
+    targetDownrange: mix(previous.targetDownrange, current.targetDownrange),
+    targetHorizontalVelocity: mix(
+      previous.targetHorizontalVelocity,
+      current.targetHorizontalVelocity,
+    ),
+    estimatedImpactDownrange: mix(
+      previous.estimatedImpactDownrange,
+      current.estimatedImpactDownrange,
+    ),
   }
 }
 
@@ -167,7 +176,7 @@ function Debrief({
         </div>
         <div className="result-grid">
           <div><span>MISSION TIME</span><strong>{formatTime(elapsed)}</strong></div>
-          <div><span>PAD ERROR</span><strong>{result.horizontalError.toFixed(1)} m</strong></div>
+          <div><span>{scenario.targetKind === 'ship' ? 'DECK ERROR' : 'PAD ERROR'}</span><strong>{result.horizontalError.toFixed(1)} m</strong></div>
           <div><span>DESCENT</span><strong>{result.descentSpeed.toFixed(1)} m/s</strong></div>
           <div><span>LATERAL</span><strong>{result.horizontalSpeed.toFixed(1)} m/s</strong></div>
           <div><span>MAIN FUEL</span><strong>{Math.round(result.mainFuelRatio * 100)}%</strong></div>

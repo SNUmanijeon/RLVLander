@@ -8,7 +8,7 @@ export function evaluateTouchdown(
   scenario: ScenarioConfig,
 ): MissionResult {
   const horizontalError = Math.abs(telemetry.distanceToTarget)
-  const horizontalSpeed = Math.abs(telemetry.horizontalVelocity)
+  const horizontalSpeed = Math.abs(telemetry.relativeHorizontalVelocity)
   const descentSpeed = Math.max(0, -telemetry.verticalVelocity)
   const pitchError = Math.abs(telemetry.pitch)
   const angularRate = Math.abs(telemetry.angularRate)
@@ -52,4 +52,3 @@ export function evaluateTouchdown(
     rcsRatio: telemetry.rcsRatio,
   }
 }
-

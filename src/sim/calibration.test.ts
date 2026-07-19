@@ -27,9 +27,10 @@ function passiveFlight(scenario: ScenarioConfig) {
 }
 
 describe('scenario calibration', () => {
-  it('places the ASDS close to the passive impact corridor', () => {
+  it('makes the passive ASDS trajectory overshoot the repositioning ship', () => {
     const flight = passiveFlight(SCENARIOS.asds)
-    expect(Math.abs(flight.finalDistance)).toBeLessThan(5_000)
+    expect(flight.finalDistance).toBeGreaterThan(5_000)
+    expect(flight.finalDistance).toBeLessThan(30_000)
   })
 
   it('makes RTLS the higher-energy mission and requires boost-back', () => {

@@ -26,6 +26,13 @@ export interface VehicleConfig {
   pitchDampingCoefficient: number
 }
 
+export interface TargetMotionConfig {
+  maxSpeed: number
+  maxAcceleration: number
+  responseTime: number
+  predictionInterval: number
+}
+
 export interface ScenarioConfig {
   id: ScenarioId
   name: string
@@ -41,6 +48,7 @@ export interface ScenarioConfig {
   targetDownrange: number
   targetWidth: number
   targetKind: 'ship' | 'pad'
+  targetMotion?: TargetMotionConfig
   vehicle: VehicleConfig
   calibrationNote: string
 }
@@ -59,6 +67,9 @@ export interface VehicleState {
   rcsCommand: number
   finDeflection: number
   legs: LegState
+  targetDownrange: number
+  targetHorizontalVelocity: number
+  estimatedImpactDownrange: number
 }
 
 export interface ControlInput {
@@ -111,6 +122,11 @@ export interface Telemetry {
   finForceRatio: number
   rcsBlend: number
   distanceToTarget: number
+  targetDownrange: number
+  targetHorizontalVelocity: number
+  relativeHorizontalVelocity: number
+  estimatedImpactDownrange: number
+  estimatedImpactError: number
   pitch: number
   angularRate: number
   throttle: number
