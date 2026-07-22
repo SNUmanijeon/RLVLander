@@ -5,7 +5,6 @@ import {
   EARTH_RADIUS,
   FIN_RATE,
   G0,
-  LEG_BREAK_Q,
   MAX_FIN_ANGLE,
   RCS_FULL_Q,
   RCS_ZERO_Q,
@@ -187,7 +186,7 @@ export function stepSimulation(
   const finTarget = clamp(input.pitchCommand, -1, 1) * MAX_FIN_ANGLE
   const finDeflection = moveToward(previous.finDeflection, finTarget, FIN_RATE * dt)
   let legs = input.deployLegs && previous.legs === 'stowed' ? 'deployed' : previous.legs
-  if (legs === 'deployed' && dynamicPressure > LEG_BREAK_Q) legs = 'broken'
+  if (legs === 'deployed' && dynamicPressure > scenario.legBreakDynamicPressure) legs = 'broken'
 
   const engineCount = throttle > 0 && previous.mainPropellant > 0 ? (h > 15_000 ? 3 : 1) : 0
   const performance = enginePerformance(atmosphere.pressure, scenario)

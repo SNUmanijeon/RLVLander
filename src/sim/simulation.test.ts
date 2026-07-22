@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FIXED_STEP, LEG_BREAK_Q } from './constants'
 import { altitude, downrange, localVelocity, positionFromLocal, velocityFromLocal } from './math'
-import { SCENARIOS } from './scenarios'
+import { SCENARIOS, scenarioForMode } from './scenarios'
 import { evaluateTouchdown } from './scoring'
 import { createInitialState, dragMagnitudeFor, stepSimulation, telemetryFor } from './simulation'
 import type { ControlInput, VehicleState } from './types'
@@ -119,6 +119,25 @@ describe('simulation', () => {
     expect(state.targetDownrange).toBe(scenario.targetDownrange)
     expect(state.targetHorizontalVelocity).toBe(0)
   })
+
+  it('gives both assisted missions wider control and landing margins', () => {
+    for (const id of ['asds', 'rtls'] as const) {
+      const standard = SCENARIOS[id]
+      const assisted = scenarioForMode(id, 'assisted')
+      expect(assisted.initialMainPropellant).toBeGreaterThan(standard.initialMainPropellant)
+      expect(assisted.targetWidth).toBeGreaterThan(standard.targetWidth)
+      expect(assisted.vehicle.minThrottle).toBeLessThan(standard.vehicle.minThrottle)
+      expect(assisted.vehicle.rcsFullCommandSeconds).toBeGreaterThan(
+        standard.vehicle.rcsFullCommandSeconds,
+      )
+      expect(assisted.landingLimits.descentSpeed).toBeGreaterThan(
+        standard.landingLimits.descentSpeed,
+      )
+      expect(assisted.legBreakDynamicPressure).toBeGreaterThan(
+        standard.legBreakDynamicPressure,
+      )
+    }
+  })
 })
 
 describe('touchdown classification', () => {
@@ -168,5 +187,22 @@ describe('touchdown classification', () => {
     const result = evaluateTouchdown(state, telemetryFor(state, scenario), scenario)
     expect(result.outcome).toBe('landed')
     expect(result.horizontalSpeed).toBeCloseTo(0)
+  })
+
+  it('accepts a forgiving touchdown only in the assisted profile', () => {
+    const standard = SCENARIOS.rtls
+    const assisted = scenarioForMode('rtls', 'assisted')
+    const position = positionFromLocal(assisted.targetDownrange, 0)
+    const radialAngle = Math.atan2(position.y, position.x)
+    const state: VehicleState = {
+      ...createInitialState(assisted),
+      position,
+      velocity: velocityFromLocal(position, 4, -5),
+      angle: radialAngle + 8 * Math.PI / 180,
+      angularRate: 8 * Math.PI / 180,
+      legs: 'deployed',
+    }
+    expect(evaluateTouchdown(state, telemetryFor(state, standard), standard).outcome).toBe('crashed')
+    expect(evaluateTouchdown(state, telemetryFor(state, assisted), assisted).outcome).toBe('landed')
   })
 })

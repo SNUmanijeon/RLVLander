@@ -1,4 +1,3 @@
-import { LANDING_LIMITS } from './constants'
 import { clamp } from './math'
 import type { FailureReason, MissionResult, ScenarioConfig, Telemetry, VehicleState } from './types'
 
@@ -12,22 +11,23 @@ export function evaluateTouchdown(
   const descentSpeed = Math.max(0, -telemetry.verticalVelocity)
   const pitchError = Math.abs(telemetry.pitch)
   const angularRate = Math.abs(telemetry.angularRate)
+  const limits = scenario.landingLimits
 
   let reason: FailureReason = 'none'
   if (pitchError > Math.PI / 4) reason = 'structural_impact'
   else if (state.legs === 'stowed') reason = 'legs_stowed'
   else if (state.legs === 'broken') reason = 'legs_broken'
   else if (horizontalError > scenario.targetWidth / 2) reason = 'off_target'
-  else if (descentSpeed > LANDING_LIMITS.descentSpeed) reason = 'excessive_descent_speed'
-  else if (horizontalSpeed > LANDING_LIMITS.horizontalSpeed) reason = 'excessive_lateral_speed'
-  else if (pitchError > LANDING_LIMITS.pitch) reason = 'excessive_tilt'
-  else if (angularRate > LANDING_LIMITS.angularRate) reason = 'excessive_rotation'
+  else if (descentSpeed > limits.descentSpeed) reason = 'excessive_descent_speed'
+  else if (horizontalSpeed > limits.horizontalSpeed) reason = 'excessive_lateral_speed'
+  else if (pitchError > limits.pitch) reason = 'excessive_tilt'
+  else if (angularRate > limits.angularRate) reason = 'excessive_rotation'
 
   const landed = reason === 'none'
   const accuracy = clamp(1 - horizontalError / (scenario.targetWidth / 2), 0, 1)
-  const verticalQuality = clamp(1 - descentSpeed / LANDING_LIMITS.descentSpeed, 0, 1)
-  const lateralQuality = clamp(1 - horizontalSpeed / LANDING_LIMITS.horizontalSpeed, 0, 1)
-  const attitudeQuality = clamp(1 - pitchError / LANDING_LIMITS.pitch, 0, 1)
+  const verticalQuality = clamp(1 - descentSpeed / limits.descentSpeed, 0, 1)
+  const lateralQuality = clamp(1 - horizontalSpeed / limits.horizontalSpeed, 0, 1)
+  const attitudeQuality = clamp(1 - pitchError / limits.pitch, 0, 1)
   const score = landed
     ? Math.round(
         350 * accuracy +

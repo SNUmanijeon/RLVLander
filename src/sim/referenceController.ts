@@ -20,7 +20,9 @@ export function referenceController(
   scenario: ScenarioConfig,
 ): ControlInput {
   const altitude = telemetry.altitude
-  const guidanceBias = scenario.id === 'asds' ? -1_075 : 30
+  const guidanceBias = scenario.id === 'asds'
+    ? scenario.assistMode === 'assisted' ? -200 : -1_075
+    : scenario.assistMode === 'assisted' ? -1_700 : 30
   const targetError = -telemetry.distanceToTarget + guidanceBias
   const ballisticTime = clamp(
     Math.sqrt((2 * Math.max(altitude, 1)) / 9.81) + Math.max(0, telemetry.verticalVelocity) / 9.81,
@@ -98,6 +100,9 @@ export function referenceController(
   return {
     throttleDelta,
     pitchCommand,
-    deployLegs: altitude < 350 && telemetry.dynamicPressure < 5_000 && state.legs === 'stowed',
+    deployLegs:
+      altitude < 350 &&
+      telemetry.dynamicPressure < scenario.legBreakDynamicPressure &&
+      state.legs === 'stowed',
   }
 }

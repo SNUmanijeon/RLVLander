@@ -1,5 +1,5 @@
-import { clamp, positionFromLocal, velocityFromLocal } from '../sim/math'
-import type { ScenarioConfig, Vec2 } from '../sim/types'
+import { clamp, lerp, positionFromLocal, velocityFromLocal } from '../sim/math'
+import type { CameraMode, ScenarioConfig, Vec2 } from '../sim/types'
 
 export interface SecondStageVisual {
   position: Vec2
@@ -9,6 +9,25 @@ export interface SecondStageVisual {
 
 export function fixedCameraScale(width: number, height: number): number {
   return Math.max(1_400 / Math.max(width * 0.82, 1), 1_400 / Math.max(height * 0.7, 1))
+}
+
+export function cameraScaleFor(
+  mode: CameraMode,
+  width: number,
+  height: number,
+  altitude: number,
+  distanceToTarget: number,
+): number {
+  const zoomScale = fixedCameraScale(width, height)
+  const baseScale = zoomScale * 4.5
+  if (mode === 'zoom') return zoomScale
+  if (mode === 'base') return baseScale
+
+  const altitudeBlend = clamp((altitude - 1_500) / 18_500, 0, 1)
+  const distanceBlend = clamp((Math.abs(distanceToTarget) - 2_500) / 37_500, 0, 1)
+  const wideBlend = Math.max(altitudeBlend, distanceBlend)
+  const smoothBlend = wideBlend * wideBlend * (3 - 2 * wideBlend)
+  return lerp(zoomScale, baseScale, smoothBlend)
 }
 
 export function skyBlendForAltitude(altitude: number): number {

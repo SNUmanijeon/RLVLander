@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { altitude, downrange } from '../sim/math'
 import { SCENARIOS } from '../sim/scenarios'
 import {
+  cameraScaleFor,
   fixedCameraScale,
   reentryIntensity,
   secondStageVisual,
@@ -13,6 +14,16 @@ describe('visual flight model', () => {
     const scale = fixedCameraScale(1_280, 720)
     expect(scale).toBeGreaterThan(0)
     expect(scale).toBeCloseTo(1_400 / (720 * 0.7))
+  })
+
+  it('supports base, zoom, and approach-responsive automatic camera scales', () => {
+    const zoom = cameraScaleFor('zoom', 1_280, 720, 70_000, 200_000)
+    const base = cameraScaleFor('base', 1_280, 720, 70_000, 200_000)
+    const autoFar = cameraScaleFor('auto', 1_280, 720, 70_000, 200_000)
+    const autoNear = cameraScaleFor('auto', 1_280, 720, 500, 500)
+    expect(base).toBeGreaterThan(zoom)
+    expect(autoFar).toBeCloseTo(base)
+    expect(autoNear).toBeCloseTo(zoom)
   })
 
   it('transitions from space to a blue lower atmosphere', () => {

@@ -4,8 +4,19 @@ export interface Vec2 {
 }
 
 export type ScenarioId = 'asds' | 'rtls'
+export type AssistMode = 'assisted' | 'standard'
+export type CameraMode = 'base' | 'zoom' | 'auto'
+export type TimeScale = 1 | 2 | 5 | 10 | 20
+export type ScoreKey = `${ScenarioId}:${AssistMode}`
 export type LegState = 'stowed' | 'deployed' | 'broken'
 export type MissionPhase = 'briefing' | 'active' | 'paused' | 'landed' | 'crashed'
+
+export interface LandingLimits {
+  horizontalSpeed: number
+  descentSpeed: number
+  pitch: number
+  angularRate: number
+}
 
 export interface VehicleConfig {
   length: number
@@ -49,6 +60,9 @@ export interface ScenarioConfig {
   targetWidth: number
   targetKind: 'ship' | 'pad'
   targetMotion?: TargetMotionConfig
+  assistMode: AssistMode
+  landingLimits: LandingLimits
+  legBreakDynamicPressure: number
   vehicle: VehicleConfig
   calibrationNote: string
 }
@@ -78,7 +92,7 @@ export interface ControlInput {
   deployLegs: boolean
   pause?: boolean
   retry?: boolean
-  timeScale?: 1 | 2
+  timeScale?: TimeScale
 }
 
 export type FailureReason =

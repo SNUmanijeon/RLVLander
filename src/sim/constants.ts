@@ -1,10 +1,11 @@
-import type { VehicleConfig } from './types'
+import type { LandingLimits, TimeScale, VehicleConfig } from './types'
 
 export const EARTH_RADIUS = 6_371_000
 export const EARTH_MU = 3.986_004_418e14
 export const G0 = 9.80665
 export const SEA_LEVEL_PRESSURE = 101_325
 export const FIXED_STEP = 1 / 120
+export const TIME_SCALES: readonly TimeScale[] = [1, 2, 5, 10, 20]
 
 export const DEG = Math.PI / 180
 export const RAD = 180 / Math.PI
@@ -18,7 +19,7 @@ export const LEG_BREAK_Q = 5_000
 export const RCS_FULL_Q = 5_000
 export const RCS_ZERO_Q = 20_000
 
-export const LANDING_LIMITS = {
+export const LANDING_LIMITS: LandingLimits = {
   horizontalSpeed: 2.5,
   descentSpeed: 3,
   pitch: 5 * DEG,

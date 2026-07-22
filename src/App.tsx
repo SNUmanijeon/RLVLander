@@ -1,21 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TelemetryPanel } from './components/TelemetryPanel'
 import { TouchControls } from './components/TouchControls'
 import { drawGame } from './game/render'
 import { applyFlightControl, keyboardAction } from './input/controls'
-import { FIXED_STEP } from './sim/constants'
+import { FIXED_STEP, TIME_SCALES } from './sim/constants'
 import { clamp, wrapAngle } from './sim/math'
 import { predictGravityOnly } from './sim/predictor'
-import { SCENARIOS } from './sim/scenarios'
+import { SCENARIOS, scenarioForMode, scoreKey } from './sim/scenarios'
 import { createInitialState, stepSimulation, telemetryFor } from './sim/simulation'
-import { loadGameData, saveBestScore, saveTimeScale } from './sim/storage'
+import {
+  loadGameData,
+  saveAssistMode,
+  saveBestScore,
+  saveCameraMode,
+  saveTimeScale,
+} from './sim/storage'
 import type {
+  AssistMode,
+  CameraMode,
   ControlInput,
   MissionPhase,
   MissionResult,
   ScenarioConfig,
   ScenarioId,
+  ScoreKey,
   Telemetry,
+  TimeScale,
   Vec2,
   VehicleState,
 } from './sim/types'
@@ -74,16 +84,21 @@ function formatTime(seconds: number): string {
 
 function MissionBriefing({
   selected,
+  scenario,
+  assistMode,
   bestScores,
   onSelect,
+  onAssistMode,
   onStart,
 }: {
   selected: ScenarioId
-  bestScores: Partial<Record<ScenarioId, number>>
+  scenario: ScenarioConfig
+  assistMode: AssistMode
+  bestScores: Partial<Record<ScoreKey, number>>
   onSelect: (scenario: ScenarioId) => void
+  onAssistMode: (mode: AssistMode) => void
   onStart: () => void
 }) {
-  const scenario = SCENARIOS[selected]
   return (
     <div className="modal-layer briefing-layer">
       <section className="briefing-card" aria-labelledby="briefing-title">
@@ -112,9 +127,36 @@ function MissionBriefing({
                 <strong>{item.shortName}</strong>
                 <small>{item.name}</small>
               </span>
-              <span className="scenario-score">BEST {bestScores[item.id] ?? '—'}</span>
+              <span className="scenario-score">
+                BEST {bestScores[scoreKey(item.id, assistMode)] ?? '—'}
+              </span>
             </button>
           ))}
+        </div>
+
+        <div className="assist-picker">
+          <div>
+            <span>FLIGHT PROFILE</span>
+            <small>
+              {assistMode === 'assisted'
+                ? 'Expanded reserves, lower throttle floor, wider zones, and forgiving touchdown limits.'
+                : 'Original vehicle reserves and touchdown limits.'}
+            </small>
+          </div>
+          <div className="assist-options" role="radiogroup" aria-label="Select flight difficulty">
+            {(['assisted', 'standard'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={assistMode === mode}
+                className={assistMode === mode ? 'selected' : ''}
+                onClick={() => onAssistMode(mode)}
+              >
+                {mode === 'assisted' ? 'EASY' : 'STANDARD'}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mission-detail">
@@ -137,13 +179,13 @@ function MissionBriefing({
             <span><kbd>SPACE</kbd> LEGS</span>
           </div>
           <button className="primary-action" onClick={onStart}>
-            <span>START {scenario.shortName}</span><b>↗</b>
+            <span>START {scenario.shortName} // {assistMode === 'assisted' ? 'EASY' : 'STANDARD'}</span><b>↗</b>
           </button>
         </div>
 
         <p className="flight-note">
           Cold-gas RCS rotates the vehicle in thin air. Grid-fin authority rises with dynamic pressure.
-          Deploying the legs above 5 kPa will break them.
+          Deploying the legs above {scenario.legBreakDynamicPressure / 1000} kPa will break them.
         </p>
       </section>
     </div>
@@ -168,7 +210,9 @@ function Debrief({
     <div className="modal-layer debrief-layer">
       <section className={`debrief-card ${success ? 'success' : 'failure'}`} aria-labelledby="debrief-title">
         <div className="result-icon" aria-hidden="true">{success ? '✓' : '×'}</div>
-        <div className="eyebrow">{scenario.shortName} // FLIGHT COMPLETE</div>
+        <div className="eyebrow">
+          {scenario.shortName} // {scenario.assistMode === 'assisted' ? 'EASY' : 'STANDARD'} // FLIGHT COMPLETE
+        </div>
         <h2 id="debrief-title">{success ? 'Booster secured.' : 'Vehicle lost.'}</h2>
         <p>{success ? 'A stable touchdown inside the recovery zone.' : FAILURE_COPY[result.reason]}</p>
         <div className="score-block">
@@ -195,10 +239,15 @@ export default function App() {
   const stored = useRef(loadGameData())
   const [selectedScenario, setSelectedScenario] = useState<ScenarioId>('asds')
   const [phase, setPhaseState] = useState<MissionPhase>('briefing')
-  const [timeScale, setTimeScale] = useState<1 | 2>(stored.current.timeScale)
+  const [timeScale, setTimeScale] = useState<TimeScale>(stored.current.timeScale)
+  const [cameraMode, setCameraMode] = useState<CameraMode>(stored.current.cameraMode)
+  const [assistMode, setAssistMode] = useState<AssistMode>(stored.current.assistMode)
   const [bestScores, setBestScores] = useState(stored.current.bestScores)
   const [result, setResult] = useState<MissionResult | null>(null)
-  const scenario = SCENARIOS[selectedScenario]
+  const scenario = useMemo(
+    () => scenarioForMode(selectedScenario, assistMode),
+    [selectedScenario, assistMode],
+  )
 
   const initialState = createInitialState(scenario)
   const stateRef = useRef<VehicleState>(initialState)
@@ -241,13 +290,25 @@ export default function App() {
 
   const chooseScenario = (id: ScenarioId) => {
     setSelectedScenario(id)
-    initializeSession(SCENARIOS[id], 'briefing')
+    initializeSession(scenarioForMode(id, assistMode), 'briefing')
   }
 
-  const toggleTimeScale = () => {
-    const next = timeScale === 1 ? 2 : 1
+  const chooseAssistMode = (mode: AssistMode) => {
+    setAssistMode(mode)
+    saveAssistMode(mode)
+    initializeSession(scenarioForMode(selectedScenario, mode), 'briefing')
+  }
+
+  const cycleTimeScale = () => {
+    const currentIndex = TIME_SCALES.indexOf(timeScale)
+    const next = TIME_SCALES[(currentIndex + 1) % TIME_SCALES.length]
     setTimeScale(next)
     saveTimeScale(next)
+  }
+
+  const chooseCameraMode = (mode: CameraMode) => {
+    setCameraMode(mode)
+    saveCameraMode(mode)
   }
 
   const retry = useCallback(() => initializeSession(scenario, 'active'), [initializeSession, scenario])
@@ -332,7 +393,7 @@ export default function App() {
           if (step.result) {
             setResult(step.result)
             if (step.result.outcome === 'landed') {
-              const saved = saveBestScore(scenario.id, step.result.score)
+              const saved = saveBestScore(scenario.id, scenario.assistMode, step.result.score)
               setBestScores({ ...saved.bestScores })
               setPhase('landed')
             } else {
@@ -363,12 +424,13 @@ export default function App() {
         path: pathRef.current,
         prediction: predictionRef.current,
         phase: phaseRef.current,
+        cameraMode,
       })
       animationFrame = requestAnimationFrame(animate)
     }
     animationFrame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(animationFrame)
-  }, [scenario, setPhase, timeScale])
+  }, [cameraMode, scenario, setPhase, timeScale])
 
   return (
     <main className={`app-shell phase-${phase}`}>
@@ -387,7 +449,7 @@ export default function App() {
         <div className="top-status">
           <span className="status-dot" />
           <span>{phase === 'active' ? 'FLIGHT ACTIVE' : phase.toUpperCase()}</span>
-          <b>{scenario.shortName}</b>
+          <b>{scenario.shortName} · {scenario.assistMode === 'assisted' ? 'EASY' : 'STANDARD'}</b>
         </div>
         <button className="abort-button" onClick={returnToBriefing}>MISSION BRIEF</button>
       </header>
@@ -397,7 +459,9 @@ export default function App() {
           telemetry={telemetry}
           scenario={scenario}
           timeScale={timeScale}
-          onToggleTimeScale={toggleTimeScale}
+          cameraMode={cameraMode}
+          onCycleTimeScale={cycleTimeScale}
+          onSetCameraMode={chooseCameraMode}
         />
       )}
 
@@ -421,8 +485,11 @@ export default function App() {
       {phase === 'briefing' && (
         <MissionBriefing
           selected={selectedScenario}
+          scenario={scenario}
+          assistMode={assistMode}
           bestScores={bestScores}
           onSelect={chooseScenario}
+          onAssistMode={chooseAssistMode}
           onStart={() => setPhase('active')}
         />
       )}

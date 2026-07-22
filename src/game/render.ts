@@ -1,8 +1,15 @@
 import { DEG } from '../sim/constants'
 import { altitude, clamp, downrange, eastUnit, wrapAngle } from '../sim/math'
-import type { MissionPhase, ScenarioConfig, Telemetry, Vec2, VehicleState } from '../sim/types'
+import type {
+  CameraMode,
+  MissionPhase,
+  ScenarioConfig,
+  Telemetry,
+  Vec2,
+  VehicleState,
+} from '../sim/types'
 import {
-  fixedCameraScale,
+  cameraScaleFor,
   reentryIntensity,
   secondStageVisual,
   skyBlendForAltitude,
@@ -15,6 +22,7 @@ interface RenderFrame {
   path: Vec2[]
   prediction: Vec2[]
   phase: MissionPhase
+  cameraMode: CameraMode
 }
 
 interface Viewport {
@@ -50,7 +58,13 @@ function localPointToScreen(point: Vec2, viewport: Viewport): { x: number; y: nu
 
 function makeViewport(frame: RenderFrame, width: number, height: number): Viewport {
   const horizontalDistance = Math.abs(frame.telemetry.distanceToTarget)
-  const metersPerPixel = fixedCameraScale(width, height)
+  const metersPerPixel = cameraScaleFor(
+    frame.cameraMode,
+    width,
+    height,
+    frame.telemetry.altitude,
+    frame.telemetry.distanceToTarget,
+  )
   const visibleApproachDistance = width * metersPerPixel * 0.36
   const targetBlend = clamp(1 - horizontalDistance / visibleApproachDistance, 0, 0.5)
   const cameraX = frame.telemetry.downrange * (1 - targetBlend) +

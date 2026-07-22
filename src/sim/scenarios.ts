@@ -1,5 +1,5 @@
-import { VEHICLE } from './constants'
-import type { ScenarioConfig, ScenarioId } from './types'
+import { DEG, LANDING_LIMITS, LEG_BREAK_Q, VEHICLE } from './constants'
+import type { AssistMode, ScenarioConfig, ScenarioId, ScoreKey } from './types'
 
 export const SCENARIOS: Record<ScenarioId, ScenarioConfig> = {
   asds: {
@@ -23,6 +23,9 @@ export const SCENARIOS: Record<ScenarioId, ScenarioConfig> = {
       responseTime: 18,
       predictionInterval: 0.5,
     },
+    assistMode: 'standard',
+    landingLimits: LANDING_LIMITS,
+    legBreakDynamicPressure: LEG_BREAK_Q,
     vehicle: VEHICLE,
     calibrationNote: 'The initial coast estimate overshoots the ship; drag, retroburn, and limited ship repositioning close the gap.',
   },
@@ -41,7 +44,54 @@ export const SCENARIOS: Record<ScenarioId, ScenarioConfig> = {
     targetDownrange: 0,
     targetWidth: 80,
     targetKind: 'pad',
+    assistMode: 'standard',
+    landingLimits: LANDING_LIMITS,
+    legBreakDynamicPressure: LEG_BREAK_Q,
     vehicle: VEHICLE,
     calibrationNote: 'Gameplay-tuned as the higher-Mach, higher-dynamic-pressure mission.',
   },
+}
+
+export function scoreKey(id: ScenarioId, mode: AssistMode): ScoreKey {
+  return `${id}:${mode}`
+}
+
+export function scenarioForMode(id: ScenarioId, mode: AssistMode): ScenarioConfig {
+  const standard = SCENARIOS[id]
+  if (mode === 'standard') return standard
+
+  return {
+    ...standard,
+    assistMode: 'assisted',
+    description: id === 'asds'
+      ? 'Use the lower-throttle engine and expanded reserves to shape the overshooting arc while the faster ship follows your coast estimate.'
+      : 'Practice the flip and boost-back with expanded reserves, stronger RCS, lower minimum throttle, and a wider landing zone.',
+    objective: id === 'asds'
+      ? 'Assisted profile: more control authority, a wider deck corridor, and a more responsive recovery ship.'
+      : 'Assisted profile: extra propellant, stronger attitude control, and more forgiving touchdown limits.',
+    initialMainPropellant: id === 'asds' ? 90_000 : 175_000,
+    targetWidth: standard.targetWidth * 2,
+    targetMotion: standard.targetMotion
+      ? {
+          ...standard.targetMotion,
+          maxSpeed: 14,
+          maxAcceleration: 0.4,
+          responseTime: 14,
+        }
+      : undefined,
+    landingLimits: {
+      horizontalSpeed: 5,
+      descentSpeed: 6,
+      pitch: 10 * DEG,
+      angularRate: 10 * DEG,
+    },
+    legBreakDynamicPressure: 10_000,
+    vehicle: {
+      ...standard.vehicle,
+      minThrottle: 0.28,
+      maxRcsTorque: 850_000,
+      rcsFullCommandSeconds: 100,
+    },
+    calibrationNote: `${standard.calibrationNote} Assisted profile adds wider margins and reserves.`,
+  }
 }

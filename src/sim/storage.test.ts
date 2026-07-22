@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { loadGameData, saveBestScore, saveTimeScale } from './storage'
+import { TIME_SCALES } from './constants'
+import {
+  loadGameData,
+  saveAssistMode,
+  saveBestScore,
+  saveCameraMode,
+  saveTimeScale,
+} from './storage'
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
@@ -24,20 +31,50 @@ afterEach(() => {
 })
 
 describe('versioned local game data', () => {
+  it('offers the requested simulation speed ladder', () => {
+    expect(TIME_SCALES).toEqual([1, 2, 5, 10, 20])
+  })
+
   it('keeps only the better score for each mission', () => {
-    saveBestScore('asds', 500)
-    saveBestScore('asds', 200)
-    saveBestScore('rtls', 700)
-    expect(loadGameData().bestScores).toEqual({ asds: 500, rtls: 700 })
+    saveBestScore('asds', 'standard', 500)
+    saveBestScore('asds', 'standard', 200)
+    saveBestScore('asds', 'assisted', 700)
+    expect(loadGameData().bestScores).toEqual({
+      'asds:standard': 500,
+      'asds:assisted': 700,
+    })
   })
 
   it('persists the selected time scale', () => {
-    saveTimeScale(1)
-    expect(loadGameData().timeScale).toBe(1)
+    saveTimeScale(20)
+    expect(loadGameData().timeScale).toBe(20)
+  })
+
+  it('persists camera and assistance preferences', () => {
+    saveCameraMode('base')
+    saveAssistMode('standard')
+    expect(loadGameData().cameraMode).toBe('base')
+    expect(loadGameData().assistMode).toBe('standard')
+  })
+
+  it('migrates legacy mission scores to the standard profile', () => {
+    localStorage.setItem('rlv-lander:v1', JSON.stringify({
+      bestScores: { asds: 450, rtls: 600 },
+      timeScale: 2,
+    }))
+    expect(loadGameData().bestScores).toEqual({
+      'asds:standard': 450,
+      'rtls:standard': 600,
+    })
   })
 
   it('recovers safely from malformed storage', () => {
     localStorage.setItem('rlv-lander:v1', 'not-json')
-    expect(loadGameData()).toEqual({ bestScores: {}, timeScale: 2 })
+    expect(loadGameData()).toEqual({
+      bestScores: {},
+      timeScale: 2,
+      cameraMode: 'auto',
+      assistMode: 'assisted',
+    })
   })
 })

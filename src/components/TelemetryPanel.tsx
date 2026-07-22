@@ -1,11 +1,13 @@
 import { pitchDegrees } from '../game/render'
-import type { ScenarioConfig, Telemetry } from '../sim/types'
+import type { CameraMode, ScenarioConfig, Telemetry, TimeScale } from '../sim/types'
 
 interface TelemetryPanelProps {
   telemetry: Telemetry
   scenario: ScenarioConfig
-  timeScale: 1 | 2
-  onToggleTimeScale: () => void
+  timeScale: TimeScale
+  cameraMode: CameraMode
+  onCycleTimeScale: () => void
+  onSetCameraMode: (mode: CameraMode) => void
 }
 
 function number(value: number, digits = 0): string {
@@ -21,21 +23,21 @@ export function TelemetryPanel({
   telemetry,
   scenario,
   timeScale,
-  onToggleTimeScale,
+  cameraMode,
+  onCycleTimeScale,
+  onSetCameraMode,
 }: TelemetryPanelProps) {
+  const pitchRate = (telemetry.angularRate * 180) / Math.PI
   const values = [
     ['MET', `${number(telemetry.elapsedTime, 1)} s`],
     ['ALT', `${number(telemetry.altitude / 1000, 2)} km`],
     ['DOWNRANGE', `${number(telemetry.downrange / 1000, 1)} km`],
     ['TARGET Δ', `${number(telemetry.distanceToTarget / 1000, 2)} km`],
-    ['V-HORIZ', `${velocity(telemetry.horizontalVelocity)} m/s`],
-    ['V-VERT', `${velocity(telemetry.verticalVelocity)} m/s`],
     ['SPEED', `${number(telemetry.speed, 0)} m/s`],
     ['MACH', number(telemetry.mach, 2)],
     ['DYN PRESS', `${number(telemetry.dynamicPressure / 1000, 2)} kPa`],
     ['AERO DECEL', `${number(telemetry.aerodynamicDeceleration, 2)} m/s²`],
     ['PITCH', `${velocity(pitchDegrees(telemetry))}°`],
-    ['ROT RATE', `${velocity((telemetry.angularRate * 180) / Math.PI)} °/s`],
     ['ENGINES', telemetry.engineCount.toString()],
     ['LEGS', telemetry.legs.toUpperCase()],
   ]
@@ -56,9 +58,40 @@ export function TelemetryPanel({
           <span>LIVE TELEMETRY</span>
           <strong>{scenario.shortName}</strong>
         </div>
-        <button className="time-scale" onClick={onToggleTimeScale} aria-label="Change simulation speed">
+        <button
+          className="time-scale"
+          onClick={onCycleTimeScale}
+          aria-label={`Simulation speed ${timeScale} times. Select next speed.`}
+        >
           {timeScale}×
         </button>
+      </div>
+      <div className="flight-vitals" aria-label="Primary flight rates">
+        <div className="vital pitch-rate">
+          <span>PITCH RATE</span>
+          <strong>{velocity(pitchRate)}<small>°/s</small></strong>
+        </div>
+        <div className="vital horizontal-rate">
+          <span>HORIZONTAL</span>
+          <strong>{velocity(telemetry.horizontalVelocity)}<small>m/s</small></strong>
+        </div>
+        <div className="vital vertical-rate">
+          <span>VERTICAL</span>
+          <strong>{velocity(telemetry.verticalVelocity)}<small>m/s</small></strong>
+        </div>
+      </div>
+      <div className="camera-selector" role="group" aria-label="Camera zoom mode">
+        {(['base', 'zoom', 'auto'] as const).map((mode) => (
+          <button
+            type="button"
+            key={mode}
+            className={cameraMode === mode ? 'selected' : ''}
+            aria-pressed={cameraMode === mode}
+            onClick={() => onSetCameraMode(mode)}
+          >
+            {mode.toUpperCase()}
+          </button>
+        ))}
       </div>
       <div className="telemetry-grid">
         {values.map(([label, value]) => (

@@ -18,11 +18,14 @@ Select a mission from the briefing, then use:
 | Space | Deploy the landing legs once |
 | P or Escape | Pause or resume |
 | R | Restart the mission |
-| 1× / 2× button | Change simulation speed |
+| Speed button | Cycle simulation speed through 1×, 2×, 5×, 10×, and 20× |
+| Base / Zoom / Auto | Select a fixed wide view, fixed landing view, or automatic approach zoom |
 
 Touch controls provide the same flight commands on smaller screens.
 
-Grid fins need airflow: their force scales with dynamic pressure. Cold-gas RCS provides control in thin air but has a finite reserve. Deploying the legs above 5 kPa dynamic pressure breaks them. A successful touchdown needs intact deployed legs, contact inside the landing zone, no more than 2.5 m/s lateral speed, 3 m/s downward speed, 5° tilt, and 5°/s angular rate.
+Each mission has two flight profiles. **Standard** keeps the original reserves and touchdown limits. **Easy** adds propellant and RCS endurance, lowers the minimum throttle, widens the landing zone, raises the leg deployment limit, and allows gentler practice margins. Best scores are stored separately for each profile. The camera defaults to **Auto**.
+
+Grid fins need airflow: their force scales with dynamic pressure. Cold-gas RCS provides control in thin air but has a finite reserve. In Standard, deploying the legs above 5 kPa breaks them, and touchdown limits are 2.5 m/s lateral speed, 3 m/s downward speed, 5° tilt, and 5°/s angular rate. Easy raises those limits to 10 kPa, 5 m/s, 6 m/s, 10°, and 10°/s respectively.
 
 ## Local development
 
@@ -56,7 +59,7 @@ This runs linting, TypeScript checking, deterministic simulation tests, and a pr
 - A gravity-only trajectory estimate recalculated twice per simulated second for the minimap.
 - A drag-aware coast-impact estimate drives the ASDS station-keeping controller. The ship has capped speed and acceleration, and touchdown lateral speed is measured relative to the moving deck.
 
-The main camera holds a fixed landing-scale zoom throughout the mission so closing speed remains visually consistent. The altitude-responsive sky, RCS jets, reentry shock/plasma envelope, and departing second stage are presentation effects driven by deterministic flight state; they do not add hidden forces to the simulation.
+The camera offers a fixed Base scale, a fixed close Zoom scale, and an Auto mode that transitions smoothly as altitude and target distance fall. The altitude-responsive sky, RCS jets, reentry shock/plasma envelope, and departing second stage are presentation effects driven by deterministic flight state; they do not add hidden forces to the simulation.
 
 The pure simulation transition lives in `src/sim/simulation.ts`; scenario data is in `src/sim/scenarios.ts`. Rendering is performed on an HTML Canvas, while React supplies the mission briefing, HUD, touch controls, pause screen, and debrief.
 
